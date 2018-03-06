@@ -6,10 +6,6 @@
 		{
 		}
 
-		public override bool SupportsDistributedTransactions => false;
-
-		public override bool SupportsConcurrentTransactions => false;
-
 		public override bool SupportsFullJoin => false;
 
 		public override bool SupportsComplexExpressionInGroupBy => false;
@@ -29,5 +25,10 @@
 		public override bool SupportsDuplicatedColumnAliases => false;
 
 		public override bool SupportsEmptyInserts => false;
+
+		/// <summary>
+		/// Modulo is not supported on real, float, money, and numeric data types. [ Data type = numeric ]
+		/// </summary>
+		public override bool SupportsModuloOnDecimal => false;
 	}
 }

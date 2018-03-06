@@ -1,5 +1,6 @@
 using System;
 using System.Configuration;
+using System.Reflection;
 using NHibernate.Event;
 using NUnit.Framework;
 using NHibernate.Cfg;
@@ -27,6 +28,8 @@ namespace NHibernate.Test.CfgTest
 		[Test]
 		public void FromAppConfigTest()
 		{
+			Assume.That(TestsContext.ExecutingWithVsTest, Is.False);
+
 			IHibernateConfiguration hc = ConfigurationManager.GetSection("hibernate-configuration") as IHibernateConfiguration;
 			Assert.That(hc.ByteCodeProviderType, Is.EqualTo("lcg"));
 			Assert.IsTrue(hc.UseReflectionOptimizer);
@@ -36,11 +39,13 @@ namespace NHibernate.Test.CfgTest
 		[Test]
 		public void IgnoreSystemOutOfAppConfig()
 		{
+			Assume.That(TestsContext.ExecutingWithVsTest, Is.False);
+
 			IHibernateConfiguration hc = ConfigurationManager.GetSection("hibernate-configuration") as IHibernateConfiguration;
 			string xml =
 			@"<?xml version='1.0' encoding='utf-8' ?>
 <hibernate-configuration xmlns='urn:nhibernate-configuration-2.2'>
-		<bytecode-provider type='codedom'/>
+		<bytecode-provider type='lcg'/>
 		<reflection-optimizer use='false'/>
 		<session-factory name='MyFactoryName'>
 		</session-factory>
@@ -59,7 +64,7 @@ namespace NHibernate.Test.CfgTest
 			string xml =
 			@"<?xml version='1.0' encoding='utf-8' ?>
 <hibernate-configuration xmlns='urn:nhibernate-configuration-2.2'>
-		<bytecode-provider type='codedom'/>
+		<bytecode-provider type='lcg'/>
 </hibernate-configuration>";
 
 			XmlTextReader xtr = new XmlTextReader(xml, XmlNodeType.Document, null);

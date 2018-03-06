@@ -13,7 +13,7 @@ namespace NHibernate.Id.Insert
 	/// underlying strategy requires an subsequent select after the insert
 	/// to determine the generated identifier. 
 	/// </summary>
-	public abstract class AbstractSelectingDelegate : IInsertGeneratedIdentifierDelegate
+	public abstract partial class AbstractSelectingDelegate : IInsertGeneratedIdentifierDelegate
 	{
 		private readonly IPostInsertIdentityPersister persister;
 
@@ -54,7 +54,7 @@ namespace NHibernate.Id.Insert
 				}
 
 				var selectSql = SelectSQL;
-				using (new SessionIdLoggingContext(session.SessionId))
+				using (session.BeginProcess())
 				{
 					try
 					{

@@ -4,7 +4,6 @@ using System.Data.Common;
 using System.Text;
 using NHibernate.Dialect.Function;
 using NHibernate.Dialect.Schema;
-using NHibernate.Mapping;
 using NHibernate.SqlCommand;
 using NHibernate.SqlTypes;
 using NHibernate.Util;
@@ -64,7 +63,7 @@ namespace NHibernate.Dialect
 			RegisterColumnType(DbType.String, 16777215, "MEDIUMTEXT");
 			//todo: future: add compatibility with decimal???
 			//An unpacked fixed-point number. Behaves like a CHAR column; 
-			//ìunpackedî means the number is stored as a string, using one character for each digit of the value.
+			//‚Äúunpacked‚Äù means the number is stored as a string, using one character for each digit of the value.
 			//M is the total number of digits and D is the number of digits after the decimal point
 			//DECIMAL[(M[,D])] [UNSIGNED] [ZEROFILL]
 
@@ -262,8 +261,8 @@ namespace NHibernate.Dialect
 			RegisterFunction("ceiling", new StandardSQLFunction("ceiling"));
 			RegisterFunction("floor", new StandardSQLFunction("floor"));
 			RegisterFunction("round", new StandardSQLFunction("round"));
-			RegisterFunction("truncate", new StandardSQLFunction("truncate"));
-			
+			RegisterFunction("truncate", new StandardSafeSQLFunction("truncate", 2));
+
 			RegisterFunction("rand", new NoArgSQLFunction("rand", NHibernateUtil.Double));
 			
 			RegisterFunction("power", new StandardSQLFunction("power", NHibernateUtil.Double));
@@ -285,7 +284,7 @@ namespace NHibernate.Dialect
 			RegisterFunction("ucase", new StandardSQLFunction("ucase"));
 			RegisterFunction("lcase", new StandardSQLFunction("lcase"));
 
-			RegisterFunction("chr", new StandardSQLFunction("char", NHibernateUtil.Character));
+			RegisterFunction("chr", new SQLFunctionTemplate(NHibernateUtil.Character, "cast(char(?1) as char)"));
 			RegisterFunction("ascii", new StandardSQLFunction("ascii", NHibernateUtil.Int32));
 			RegisterFunction("instr", new StandardSQLFunction("instr", NHibernateUtil.Int32));
 			RegisterFunction("lpad", new StandardSQLFunction("lpad", NHibernateUtil.String));
@@ -494,15 +493,8 @@ namespace NHibernate.Dialect
 		/// </summary>
 		/// <param name="sqlType">The <see cref="SqlType"/> typecode </param>
 		/// <returns> The database type name </returns>
-		public override string GetCastTypeName(SqlType sqlType)
-		{
-			string result = castTypeNames.Get(sqlType.DbType, Column.DefaultLength, Column.DefaultPrecision, Column.DefaultScale);
-			if (result == null)
-			{
-				throw new HibernateException(string.Format("No CAST() type mapping for SqlType {0}", sqlType));
-			}
-			return result;
-		}
+		public override string GetCastTypeName(SqlType sqlType) =>
+			GetCastTypeName(sqlType, castTypeNames);
 
 		public override long TimestampResolutionInTicks
 		{
@@ -512,6 +504,15 @@ namespace NHibernate.Dialect
 				return TimeSpan.TicksPerSecond;
 			}
 		}
+
+		/// <summary>
+		/// Does this dialect support concurrent writing connections in the same transaction?
+		/// </summary>
+		/// <remarks>
+		/// NotSupportedException : Multiple simultaneous connections or connections with different 
+		/// connection strings inside the same transaction are not currently supported.
+		/// </remarks>
+		public override bool SupportsConcurrentWritingConnectionsInSameTransaction => false;
 
 		#region Overridden informational metadata
 
@@ -531,6 +532,15 @@ namespace NHibernate.Dialect
 		// v5.7: 
 		/// <inheritdoc/>
 		public override bool SupportsHavingOnGroupedByComputation => false;
+
+		/// <summary>
+		/// Does this dialect support distributed transaction?
+		/// </summary>
+		/// <remarks>
+		/// Fails enlisting a connection into a distributed transaction, fails promoting a transaction
+		/// to distributed when it has already a connection enlisted.
+		/// </remarks>
+		public override bool SupportsDistributedTransactions => false;
 
 		#endregion
 	}

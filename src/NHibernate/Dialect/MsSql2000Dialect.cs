@@ -284,9 +284,10 @@ namespace NHibernate.Dialect
 			RegisterFunction("sign", new StandardSQLFunction("sign", NHibernateUtil.Int32));
 
 			RegisterFunction("ceiling", new StandardSQLFunction("ceiling"));
-			RegisterFunction("ceil", new StandardSQLFunction("ceil"));
+			RegisterFunction("ceil", new StandardSQLFunction("ceiling"));
 			RegisterFunction("floor", new StandardSQLFunction("floor"));
-			RegisterFunction("round", new StandardSQLFunction("round"));
+			RegisterFunction("round", new RoundEmulatingSingleParameterFunction());
+			RegisterFunction("truncate", new SQLFunctionTemplate(null, "round(?1, ?2, 1)"));
 
 			RegisterFunction("power", new StandardSQLFunction("power", NHibernateUtil.Double));
 
@@ -326,7 +327,8 @@ namespace NHibernate.Dialect
 			RegisterFunction("date", new SQLFunctionTemplate(NHibernateUtil.Date, "dateadd(dd, 0, datediff(dd, 0, ?1))"));
 			RegisterFunction("concat", new VarArgsSQLFunction(NHibernateUtil.String, "(", "+", ")"));
 			RegisterFunction("digits", new StandardSQLFunction("digits", NHibernateUtil.String));
-			RegisterFunction("chr", new StandardSQLFunction("chr", NHibernateUtil.Character));
+			RegisterFunction("ascii", new StandardSQLFunction("ascii", NHibernateUtil.Int32));
+			RegisterFunction("chr", new StandardSQLFunction("char", NHibernateUtil.Character));
 			RegisterFunction("upper", new StandardSQLFunction("upper"));
 			RegisterFunction("ucase", new StandardSQLFunction("ucase"));
 			RegisterFunction("lcase", new StandardSQLFunction("lcase"));
@@ -373,7 +375,8 @@ namespace NHibernate.Dialect
 			RegisterColumnType(DbType.Byte, "TINYINT");
 			RegisterColumnType(DbType.Currency, "MONEY");
 			RegisterColumnType(DbType.Decimal, "DECIMAL(19,5)");
-			RegisterColumnType(DbType.Decimal, 19, "DECIMAL($p, $s)");
+			// SQL Server max precision is 38, but .Net is limited to 28-29.
+			RegisterColumnType(DbType.Decimal, 28, "DECIMAL($p, $s)");
 			RegisterColumnType(DbType.Double, "FLOAT(53)");
 			RegisterColumnType(DbType.Int16, "SMALLINT");
 			RegisterColumnType(DbType.Int32, "INT");
@@ -410,10 +413,8 @@ namespace NHibernate.Dialect
 			get { return "CURRENT_TIMESTAMP"; }
 		}
 
-		public override string CurrentTimestampSelectString
-		{
-			get { return "SELECT CURRENT_TIMESTAMP"; }
-		}
+		public override string CurrentTimestampSelectString =>
+			"SELECT " + CurrentTimestampSQLFunctionName;
 
 		public override bool IsCurrentTimestampSelectStringCallable
 		{
@@ -555,6 +556,19 @@ namespace NHibernate.Dialect
 			return true;
 		}
 
+		public override string Qualify(string catalog, string schema, string name)
+		{
+			if (!string.IsNullOrEmpty(catalog))
+			{
+				return string.Join(".", catalog, schema, name);
+			}
+			if (!string.IsNullOrEmpty(schema))
+			{
+				return string.Join(".", schema, name);
+			}
+			return name;
+		}
+
 		/// <summary />
 		/// <param name="name"></param>
 		/// <returns></returns>
@@ -622,25 +636,45 @@ namespace NHibernate.Dialect
 			}
 		}
 
-		public override string GetIfExistsDropConstraint(Table table, string name)
+		public override string GetIfExistsDropConstraint(string catalog, string schema, string tableName, string name)
 		{
-			string selectExistingObject = GetSelectExistingObject(name, table);
+			string selectExistingObject = GetSelectExistingObject(catalog, schema, tableName, name);
 			return string.Format(@"if exists ({0})", selectExistingObject);
 		}
 
-		protected virtual string GetSelectExistingObject(string name, Table table)
+		public override string GetIfNotExistsCreateConstraint(string catalog, string schema, string table, string name)
 		{
-			string objName = table.GetQuotedSchemaName(this) + Quote(name);
-			return string.Format("select 1 from sysobjects where id = OBJECT_ID(N'{0}') AND parent_obj = OBJECT_ID('{1}')",
-								 objName, table.GetQuotedName(this));
-		}
-
-		public override string GetIfNotExistsCreateConstraint(Table table, string name)
-		{
-			string selectExistingObject = GetSelectExistingObject(name, table);
+			string selectExistingObject = GetSelectExistingObject(catalog, schema, table, name);
 			return string.Format(@"if not exists ({0})", selectExistingObject);
 		}
-		
+
+		// Since v5.1
+		[Obsolete("Please use overload with catalog and schema parameters")]
+		protected virtual string GetSelectExistingObject(string name, Table table)
+		{
+			var catalog = table.GetQuotedCatalog(this, null);
+			var schema = table.GetQuotedSchema(this, null);
+			return GetSelectExistingObject(catalog, schema, table.GetQuotedName(), name);
+		}
+
+		/// <summary>
+		/// Returns a string containing the query to check if an object exists
+		/// </summary>
+		/// <param name="catalog">The catalong name</param>
+		/// <param name="schema">The schema name</param>
+		/// <param name="table">The table name</param>
+		/// <param name="name">The name of the object</param>
+		/// <returns></returns>
+		protected virtual string GetSelectExistingObject(string catalog, string schema, string table, string name)
+		{
+			return
+				string.Format(
+					"select 1 from {0} where id = OBJECT_ID(N'{1}') and parent_obj = OBJECT_ID(N'{2}')",
+					Qualify(catalog, "dbo", "sysobjects"),
+					Qualify(catalog, schema, Quote(name)),
+					Qualify(catalog, schema, table));
+		}
+
 		[Serializable]
 		protected class CountBigQueryFunction : ClassicAggregateFunction
 		{
@@ -677,6 +711,11 @@ namespace NHibernate.Dialect
 		{
 			get { return true; }
 		}
+
+		// Was 30 in "earlier version", without telling to which version the document apply.
+		// https://msdn.microsoft.com/en-us/library/ms191240.aspx#Anchor_3
+		/// <inheritdoc />
+		public override int MaxAliasLength => 30;
 
 		#region Overridden informational metadata
 
@@ -729,7 +768,7 @@ namespace NHibernate.Dialect
 				// in various kinds of "FROM table1 alias1, table2 alias2".
 				_matchRegex = new Regex(" (" + aliasesPattern + ")([, ]|$)");
 				_unionSubclassRegex = new Regex(@"from\s+\(((?:.|\r|\n)*)\)(?:\s+as)?\s+(?<alias>" + aliasesPattern + ")", RegexOptions.IgnoreCase | RegexOptions.Multiline);
-	}
+			}
 
 			public SqlString AppendLockHint(SqlString sql)
 			{
@@ -739,11 +778,11 @@ namespace NHibernate.Dialect
 				{
 					if (part == Parameter.Placeholder)
 					{
-						result.Add((Parameter)part);
+						result.Add((Parameter) part);
 						continue;
-}
+					}
 
-					result.Add(ProcessUnionSubclassCase((string)part) ?? _matchRegex.Replace((string)part, ReplaceMatch));
+					result.Add(ProcessUnionSubclassCase((string) part) ?? _matchRegex.Replace((string) part, ReplaceMatch));
 				}
 
 				return result.ToSqlString();

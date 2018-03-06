@@ -7,7 +7,7 @@ using System.Collections.Generic;
 namespace NHibernate.Tool.hbm2ddl
 {
 	// Candidate to be exstensions of ISessionFactory and Configuration
-	public static class SchemaMetadataUpdater
+	public static partial class SchemaMetadataUpdater
 	{
 		public static void Update(ISessionFactoryImplementor sessionFactory)
 		{
@@ -42,6 +42,7 @@ namespace NHibernate.Tool.hbm2ddl
 			}
 		}
 
+		// Since v5
 		[Obsolete("Use the overload that passes dialect so keywords will be updated and persisted before auto-quoting")]
 		public static void QuoteTableAndColumns(Configuration configuration)
 		{

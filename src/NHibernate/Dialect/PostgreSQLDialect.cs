@@ -1,10 +1,14 @@
+using System;
+using System.Collections;
 using System.Data;
 using System.Data.Common;
-using NHibernate.Cfg;
 using NHibernate.Dialect.Function;
 using NHibernate.Dialect.Schema;
+using NHibernate.Engine;
 using NHibernate.SqlCommand;
 using NHibernate.SqlTypes;
+using NHibernate.Type;
+using Environment = NHibernate.Cfg.Environment;
 
 namespace NHibernate.Dialect
 {
@@ -29,7 +33,8 @@ namespace NHibernate.Dialect
 		public PostgreSQLDialect()
 		{
 			DefaultProperties[Environment.ConnectionDriver] = "NHibernate.Driver.NpgsqlDriver";
-			
+
+			RegisterDateTimeTypeMappings();
 			RegisterColumnType(DbType.AnsiStringFixedLength, "char(255)");
 			RegisterColumnType(DbType.AnsiStringFixedLength, 8000, "char($l)");
 			RegisterColumnType(DbType.AnsiString, "varchar(255)");
@@ -40,10 +45,9 @@ namespace NHibernate.Dialect
 			RegisterColumnType(DbType.Boolean, "boolean");
 			RegisterColumnType(DbType.Byte, "int2");
 			RegisterColumnType(DbType.Currency, "decimal(16,4)");
-			RegisterColumnType(DbType.Date, "date");
-			RegisterColumnType(DbType.DateTime, "timestamp");
 			RegisterColumnType(DbType.Decimal, "decimal(19,5)");
-			RegisterColumnType(DbType.Decimal, 19, "decimal($p, $s)");
+			// PostgreSQL max precision is unlimited, but .Net is limited to 28-29.
+			RegisterColumnType(DbType.Decimal, 28, "decimal($p, $s)");
 			RegisterColumnType(DbType.Double, "float8");
 			RegisterColumnType(DbType.Int16, "int2");
 			RegisterColumnType(DbType.Int32, "int4");
@@ -54,7 +58,6 @@ namespace NHibernate.Dialect
 			RegisterColumnType(DbType.String, "varchar(255)");
 			RegisterColumnType(DbType.String, 4000, "varchar($l)");
 			RegisterColumnType(DbType.String, 1073741823, "text");
-			RegisterColumnType(DbType.Time, "time");
 
 			// Override standard HQL function
 			RegisterFunction("current_timestamp", new NoArgSQLFunction("now", NHibernateUtil.DateTime, true));
@@ -66,7 +69,7 @@ namespace NHibernate.Dialect
 			RegisterFunction("mod", new SQLFunctionTemplate(NHibernateUtil.Int32, "((?1) % (?2))"));
 
 			RegisterFunction("sign", new StandardSQLFunction("sign", NHibernateUtil.Int32));
-			RegisterFunction("round", new SQLFunctionTemplate(NHibernateUtil.Double, "round(cast(?1 as numeric), ?2)"));
+			RegisterFunction("round", new RoundFunction());
 
 			// Trigonometric functions.
 			RegisterFunction("acos", new StandardSQLFunction("acos", NHibernateUtil.Double));
@@ -79,6 +82,12 @@ namespace NHibernate.Dialect
 			RegisterFunction("atan2", new StandardSQLFunction("atan2", NHibernateUtil.Double));
 
 			RegisterFunction("power", new StandardSQLFunction("power", NHibernateUtil.Double));
+
+			RegisterFunction("floor", new StandardSQLFunction("floor"));
+			RegisterFunction("ceiling", new StandardSQLFunction("ceiling"));
+			RegisterFunction("ceil", new StandardSQLFunction("ceil"));
+			RegisterFunction("chr", new StandardSQLFunction("chr", NHibernateUtil.Character));
+			RegisterFunction("ascii", new StandardSQLFunction("ascii", NHibernateUtil.Int32));
 
 			// Register the date function, since when used in LINQ select clauses, NH must know the data type.
 			RegisterFunction("date", new SQLFunctionTemplate(NHibernateUtil.Date, "cast(?1 as date)"));
@@ -113,6 +122,13 @@ namespace NHibernate.Dialect
 		};
 
 		#endregion
+
+		protected virtual void RegisterDateTimeTypeMappings()
+		{
+			RegisterColumnType(DbType.Date, "date");
+			RegisterColumnType(DbType.DateTime, "timestamp");
+			RegisterColumnType(DbType.Time, "time");
+		}
 
 		protected virtual void RegisterKeywords()
 		{
@@ -301,5 +317,30 @@ namespace NHibernate.Dialect
 		public override bool SupportsUnboundedLobLocatorMaterialization => false;
 
 		#endregion
+
+		[Serializable]
+		private class RoundFunction : ISQLFunction
+		{
+			private static readonly ISQLFunction Round = new StandardSQLFunction("round");
+
+			// PostgreSQL round with two arguments only accepts decimal as input, thus the cast.
+			// It also yields only decimal, but for emulating similar behavior to other databases, we need
+			// to have it converted to the original input type, which will be done by NHibernate thanks to
+			// not specifying the function type.
+			private static readonly ISQLFunction RoundWith2Params = new SQLFunctionTemplate(null, "round(cast(?1 as numeric), ?2)");
+
+			public IType ReturnType(IType columnType, IMapping mapping) => columnType;
+
+			public bool HasArguments => true;
+
+			public bool HasParenthesesIfNoArguments => true;
+
+			public SqlString Render(IList args, ISessionFactoryImplementor factory)
+			{
+				return args.Count == 2 ? RoundWith2Params.Render(args, factory) : Round.Render(args, factory);
+			}
+
+			public override string ToString() => "round";
+		}
 	}
 }

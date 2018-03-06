@@ -112,6 +112,7 @@ namespace NHibernate.Hql.Ast
 			return (HqlExpression)node;
 		}
 
+		// Since v5
 		[Obsolete]
 		public static HqlBooleanExpression AsBooleanExpression(this HqlTreeNode node)
 		{
@@ -696,6 +697,19 @@ namespace NHibernate.Hql.Ast
 			: base(HqlSqlWalker.METHOD_CALL, "method", factory)
 		{
 			AddChild(new HqlIdent(factory, "cast"));
+			AddChild(new HqlExpressionList(factory, expression, new HqlIdent(factory, type)));
+		}
+	}
+
+	/// <summary>
+	/// Cast node intended solely to hint HQL at the resulting type, without issuing an actual SQL cast.
+	/// </summary>
+	public class HqlTransparentCast : HqlExpression
+	{
+		public HqlTransparentCast(IASTFactory factory, HqlExpression expression, System.Type type)
+			: base(HqlSqlWalker.METHOD_CALL, "method", factory)
+		{
+			AddChild(new HqlIdent(factory, "transparentcast"));
 			AddChild(new HqlExpressionList(factory, expression, new HqlIdent(factory, type)));
 		}
 	}

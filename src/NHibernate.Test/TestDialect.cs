@@ -30,17 +30,11 @@ namespace NHibernate.Test
 		public virtual bool SupportsOperatorSome => true;
 		public virtual bool SupportsLocate => true;
 
-		public virtual bool SupportsDistributedTransactions => true;
-
-		/// <summary>
-		/// Whether two transactions can be run at the same time.  For example, with SQLite
-		/// the database is locked when one transaction is run, so running a second transaction
-		/// will cause a "database is locked" error message.
-		/// </summary>
-		public virtual bool SupportsConcurrentTransactions => true;
-
 		public virtual bool SupportsFullJoin => true;
 
+		/// <summary>
+		/// Does the dialect lack a true handling of decimal?
+		/// </summary>
 		public virtual bool HasBrokenDecimalType => false;
 
 		public virtual bool SupportsNullCharactersInUtfStrings => true;
@@ -64,6 +58,11 @@ namespace NHibernate.Test
 		/// </summary>
 		public virtual bool SupportsEmptyInserts => true;
 
+		/// <summary>
+		/// Supports condition not bound to any data, like "where @p1 = @p2".
+		/// </summary>
+		public virtual bool SupportsNonDataBoundCondition => true;
+
 		public bool SupportsSqlType(SqlType sqlType)
 		{
 			try
@@ -76,5 +75,10 @@ namespace NHibernate.Test
 				return false;
 			}
 		}
+
+		/// <summary>
+		/// Supports the modulo operator on decimal types
+		/// </summary>
+		public virtual bool SupportsModuloOnDecimal => true;
 	}
 }

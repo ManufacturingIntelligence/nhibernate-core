@@ -214,12 +214,18 @@ namespace NHibernate.Util
 
 		public static readonly IEnumerable EmptyEnumerable = new EmptyEnumerableClass();
 		public static readonly IDictionary EmptyMap = new EmptyMapClass();
+
+		public static IDictionary<TKey, TValue> EmptyDictionary<TKey, TValue>()
+		{
+			return EmptyMapClass<TKey, TValue>.Instance;
+		}
+
 		public static readonly ICollection EmptyCollection = EmptyMap;
-		// To be removed in v6.0
+		// Since v5
 		[Obsolete("It has no more usages in NHibernate and will be removed in a future version.")]
 		public static readonly IList EmptyList = new EmptyListClass();
 
-		// To be removed in v6.0
+		// Obsolete since v5
 		/// <summary>
 		/// Determines if two collections have equals elements, with the same ordering.
 		/// </summary>
@@ -265,7 +271,7 @@ namespace NHibernate.Util
 			return true;
 		}
 
-		// To be removed in v6.0
+		// Since v5
 		[Obsolete("It has no more usages in NHibernate and will be removed in a future version.")]
 		public static bool DictionaryEquals(IDictionary a, IDictionary b)
 		{
@@ -295,7 +301,7 @@ namespace NHibernate.Util
 			return true;
 		}
 
-		// To be removed in v6.0
+		// Obsolete since v5
 		/// <summary>
 		/// Computes a hash code for <paramref name="coll"/>.
 		/// </summary>
@@ -463,7 +469,17 @@ namespace NHibernate.Util
 		[Serializable]
 		public class EmptyMapClass<TKey, TValue> : IDictionary<TKey, TValue>
 		{
+#pragma warning disable 618 // Constructor is obsolete, to be switched to non-obsolete but private.
+			internal static readonly IDictionary<TKey, TValue> Instance = new EmptyMapClass<TKey, TValue>();
+#pragma warning restore 618
+
 			private static readonly EmptyEnumerator<TKey, TValue> emptyEnumerator = new EmptyEnumerator<TKey, TValue>();
+
+			// Since v5.1. To be switched to private.
+			[Obsolete("Please use CollectionHelper.EmptyDictionary<TKey, TValue>() instead.")]
+			public EmptyMapClass()
+			{
+			}
 
 			#region IDictionary<TKey,TValue> Members
 
@@ -496,12 +512,12 @@ namespace NHibernate.Util
 
 			public ICollection<TKey> Keys
 			{
-				get { return new List<TKey>(); }
+				get { return Array.Empty<TKey>(); }
 			}
 
 			public ICollection<TValue> Values
 			{
-				get { return new List<TValue>(); }
+				get { return Array.Empty<TValue>(); }
 			}
 
 			#endregion
@@ -596,7 +612,7 @@ namespace NHibernate.Util
 		public static bool SetEquals<T>(ISet<T> s1, ISet<T> s2)
 			=> FastCheckEquality(s1, s2) ?? s1.SetEquals(s2);
 
-		// To be removed in v6.0
+		// Obsolete since v5
 		/// <summary>
 		/// Determines if two collections have equals elements, with the same ordering.
 		/// </summary>

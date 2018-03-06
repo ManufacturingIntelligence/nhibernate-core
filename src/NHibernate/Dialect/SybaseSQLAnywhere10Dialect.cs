@@ -46,7 +46,7 @@ namespace NHibernate.Dialect
 	///	</item>
 	/// </list>
 	/// </remarks>
-	public class SybaseSQLAnywhere10Dialect : Dialect
+	public partial class SybaseSQLAnywhere10Dialect : Dialect
 	{
 		public SybaseSQLAnywhere10Dialect()
 		{
@@ -91,7 +91,8 @@ namespace NHibernate.Dialect
 			RegisterColumnType(DbType.Single, "REAL");
 			RegisterColumnType(DbType.Double, "DOUBLE");
 			RegisterColumnType(DbType.Decimal, "NUMERIC(19,5)"); // Precision ranges from 0-127
-			RegisterColumnType(DbType.Decimal, 19, "NUMERIC($p, $s)"); // Precision ranges from 0-127
+			// Anywhere max precision is 127, but .Net is limited to 28-29.
+			RegisterColumnType(DbType.Decimal, 28, "NUMERIC($p, $s)"); // Precision ranges from 0-127
 		}
 
 		protected virtual void RegisterDateTimeTypeMappings()
@@ -199,17 +200,17 @@ namespace NHibernate.Dialect
 		protected virtual void RegisterDateFunctions()
 		{
 			RegisterFunction("date", new StandardSQLFunction("date", NHibernateUtil.Date));
-			RegisterFunction("dateadd", new StandardSQLFunction("dateadd", NHibernateUtil.Timestamp));
+			RegisterFunction("dateadd", new StandardSQLFunction("dateadd", NHibernateUtil.DateTime));
 			RegisterFunction("datediff", new StandardSQLFunction("datediff", NHibernateUtil.Int32));
 			RegisterFunction("dateformat", new StandardSQLFunction("dateformat", NHibernateUtil.String));
 			RegisterFunction("datename", new StandardSQLFunction("datename", NHibernateUtil.String));
 			RegisterFunction("datepart", new StandardSQLFunction("datepart", NHibernateUtil.Int32));
-			RegisterFunction("datetime", new StandardSQLFunction("datetime", NHibernateUtil.Timestamp));
+			RegisterFunction("datetime", new StandardSQLFunction("datetime", NHibernateUtil.DateTime));
 			RegisterFunction("day", new StandardSQLFunction("day", NHibernateUtil.Int32));
 			RegisterFunction("dayname", new StandardSQLFunction("dayname", NHibernateUtil.String));
 			RegisterFunction("days", new StandardSQLFunction("days"));
 			RegisterFunction("dow", new StandardSQLFunction("dow", NHibernateUtil.Int32));
-			RegisterFunction("getdate", new StandardSQLFunction("getdate", NHibernateUtil.Timestamp));
+			RegisterFunction("getdate", new StandardSQLFunction("getdate", NHibernateUtil.DateTime));
 			RegisterFunction("hour", new StandardSQLFunction("hour", NHibernateUtil.Int32));
 			RegisterFunction("hours", new StandardSQLFunction("hours"));
 			RegisterFunction("minute", new StandardSQLFunction("minute", NHibernateUtil.Int32));
@@ -217,7 +218,7 @@ namespace NHibernate.Dialect
 			RegisterFunction("month", new StandardSQLFunction("month", NHibernateUtil.Int32));
 			RegisterFunction("monthname", new StandardSQLFunction("monthname", NHibernateUtil.String));
 			RegisterFunction("months", new StandardSQLFunction("months"));
-			RegisterFunction("now", new NoArgSQLFunction("now", NHibernateUtil.Timestamp));
+			RegisterFunction("now", new NoArgSQLFunction("now", NHibernateUtil.DateTime));
 			RegisterFunction("quarter", new StandardSQLFunction("quarter", NHibernateUtil.Int32));
 			RegisterFunction("second", new StandardSQLFunction("second", NHibernateUtil.Int32));
 			RegisterFunction("seconds", new StandardSQLFunction("seconds"));
@@ -228,7 +229,7 @@ namespace NHibernate.Dialect
 			RegisterFunction("ymd", new StandardSQLFunction("ymd", NHibernateUtil.Date));
 
 			// compatibility functions
-			RegisterFunction("current_timestamp", new NoArgSQLFunction("getdate", NHibernateUtil.Timestamp, true));
+			RegisterFunction("current_timestamp", new NoArgSQLFunction("getdate", NHibernateUtil.DateTime, true));
 			RegisterFunction("current_time", new NoArgSQLFunction("getdate", NHibernateUtil.Time, true));
 			RegisterFunction("current_date", new NoArgSQLFunction("getdate", NHibernateUtil.Date, true));
 		}
@@ -342,6 +343,8 @@ namespace NHibernate.Dialect
 			RegisterFunction("transactsql", new StandardSQLFunction("transactsql", NHibernateUtil.String));
 			RegisterFunction("varexists", new StandardSQLFunction("varexists", NHibernateUtil.Int32));
 			RegisterFunction("watcomsql", new StandardSQLFunction("watcomsql", NHibernateUtil.String));
+			RegisterFunction("truncnum", new StandardSafeSQLFunction("truncnum", 2));
+			RegisterFunction("truncate", new StandardSafeSQLFunction("truncnum", 2));
 		}
 
 		#region private static readonly string[] DialectKeywords = { ... }

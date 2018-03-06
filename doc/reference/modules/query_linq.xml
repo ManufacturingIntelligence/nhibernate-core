@@ -6,9 +6,11 @@
     for querying with NHibernate.
   </para>
   <para>
-    The Linq provider works as an extension of the <literal>ISession</literal>. It is defined in the
-    <literal>NHibernate.Linq</literal> namespace, so this namespace has to be imported for using the
-    Linq provider. Of course, the Linq namespace is still needed too.
+    <literal>IQueryable</literal> queries are obtained with the <literal>Query</literal> methods used on the
+    <literal>ISession</literal> or <literal>IStatelessSession</literal>. (Prior to NHibernate 5.0, these
+    methods were extensions defined in the <literal>NHibernate.Linq</literal> namespace.) A number of
+    NHibernate Linq extensions giving access to NHibernate specific features are defined in the
+    <literal>NHibernate.Linq</literal> namespace. Of course, the Linq namespace is still needed too.
   </para>
   <programlisting><![CDATA[using System.Linq;
 using NHibernate.Linq;]]></programlisting>
@@ -43,7 +45,31 @@ using NHibernate.Linq;]]></programlisting>
         .ToList();]]></programlisting>
 
     <para>
-      A client timeout for the query can be defined.
+      Starting with NHibernate 5.0, queries can also be created from an entity collection, with the standard
+      Linq extension <literal>AsQueryable</literal> available from <literal>System.Linq</literal> namespace.
+    </para>
+    <programlisting><![CDATA[IList<Cat> whiteKittens =
+    cat.Kittens.AsQueryable()
+        .Where(k => k.Color == "white")
+        .ToList();]]></programlisting>
+    <para>
+      This will be executed as a query on that <literal>cat</literal>'s kittens without loading the
+      entire collection.
+    </para>
+    <para>
+      If the collection is a map, call <literal>AsQueryable</literal> on its <literal>Values</literal>
+      property.
+    </para>
+    <programlisting><![CDATA[IList<Cat> whiteKittens =
+    cat.Kittens.Values.AsQueryable()
+        .Where(k => k.Color == "white")
+        .ToList();]]></programlisting>
+    <para>&nbsp;</para>
+
+    <para>
+      A client timeout for the query can be defined. As most others NHibernate specific features for
+      Linq, this is available through an extension defined in <literal>NHibernate.Linq</literal>
+      namespace.
     </para>
     <programlisting><![CDATA[IList<Cat> cats =
     session.Query<Cat>()
@@ -305,7 +331,7 @@ using NHibernate.Linq;]]></programlisting>
     <sect2 id="querylinq-supportedmethods-string">
       <title>Strings</title>
       <para>
-        Following properties and methods are supported on strings:
+        The following properties and methods are supported on strings:
       </para>
       <itemizedlist>
         <listitem>
@@ -402,7 +428,7 @@ using NHibernate.Linq;]]></programlisting>
       At that point, all defined future results are evaluated in one single round-trip to database.
     </para>
     <programlisting><![CDATA[// Define queries
-IEnumerable<Cat> cats =
+IFutureEnumerable<Cat> cats =
     session.Query<Cat>()
         .Where(c => c.Color == "black")
         .ToFuture();
@@ -410,7 +436,7 @@ IFutureValue<int> catCount =
     session.Query<Cat>()
         .ToFutureValue(q => q.Count());
 // Execute them
-foreach(Cat cat in cats)
+foreach(Cat cat in cats.GetEnumerable())
 {
     // Do something
 }
@@ -421,7 +447,9 @@ if (catCount.Value > 10)
 ]]></programlisting>
     <para>
       In above example, accessing <literal>catCount.Value</literal> does not trigger a round-trip to database:
-      it has been evaluated with <literal>cats</literal> enumeration.
+      it has been evaluated with <literal>cats.GetEnumerable()</literal> call. If instead
+      <literal>catCount.Value</literal> was accessed first, it would have executed both future and
+      <literal>cats.GetEnumerable()</literal> would have not trigger a round-trip to database.
     </para>
   </sect1>
 
@@ -431,7 +459,8 @@ if (catCount.Value > 10)
     <para>
       A Linq query may load associated entities or collection of entities. Once the query is defined, using
       <literal>Fetch</literal> allows fetching a related entity, and <literal>FetchMany</literal> allows
-      fetching a collection.
+      fetching a collection. These methods are defined as extensions in <literal>NHibernate.Linq</literal>
+      namespace.
     </para>
     <programlisting><![CDATA[IList<Cat> oldCats =
     session.Query<Cat>()
@@ -455,6 +484,7 @@ IList<Cat> oldCats =
     oldCatsQuery
         .FetchMany(c => c.AnotherCollection)
         .ToFuture()
+        .GetEnumerable()
         .ToList();]]></programlisting>
     <para>&nbsp;</para>
     
@@ -609,7 +639,10 @@ IList<Cat> oldCats =
     <programlisting><![CDATA[IList<Cat> cats =
     session.Query<Cat>()
         .Where(c => c.Name == "Max")
-        .SetOptions(o => o.SetCacheable(true).SetCacheRegion("catNames").SetCacheMode(CacheMode.Put))
+        .SetOptions(o => o
+            .SetCacheable(true)
+            .SetCacheRegion("catNames")
+            .SetCacheMode(CacheMode.Put))
         .ToList();]]></programlisting>
   </sect1>
 
@@ -667,7 +700,8 @@ IList<Cat> cats =
       </para>
       <programlisting><![CDATA[public static class CustomLinqExtensions
 {
-    [LinqExtensionMethod("dbo.aCustomFunction", LinqExtensionPreEvaluation.AllowPreEvaluation)]
+    [LinqExtensionMethod("dbo.aCustomFunction",
+        LinqExtensionPreEvaluation.AllowPreEvaluation)]
     public static string ACustomFunction(this string input, string otherInput)
     {
         // In-memory evaluation implementation.
@@ -724,8 +758,8 @@ IList<Cat> cats =
         HqlTreeBuilder treeBuilder,
         IHqlExpressionVisitor visitor)
     {
-        // This has just to transmit the argument "as is", HQL does not need a specific call for
-        // null conversion.
+        // This has just to transmit the argument "as is", HQL does not need
+        // a specific call for null conversion.
         return visitor.Visit(arguments[0]).AsExpression();
     }
 }]]></programlisting>
@@ -761,7 +795,9 @@ DefaultLinqToHqlGeneratorsRegistry
         <link linkend="configuration-programmatic">code</link> before building the session factory.
         Use one of them.
       </para>
-      <programlisting><![CDATA[<property name="linqtohql.generatorsregistry">YourNameSpace.ExtendedLinqToHqlGeneratorsRegistry, YourAssemblyName</property>]]></programlisting>
+      <programlisting><![CDATA[<property name="linqtohql.generatorsregistry">
+    YourNameSpace.ExtendedLinqToHqlGeneratorsRegistry, YourAssemblyName
+</property>]]></programlisting>
       <programlisting><![CDATA[using NHibernate.Cfg;
 // ...
 

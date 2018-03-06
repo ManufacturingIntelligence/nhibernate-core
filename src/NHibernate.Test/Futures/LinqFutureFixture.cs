@@ -1,4 +1,5 @@
-﻿using NHibernate.Driver;
+﻿using System.Collections.Generic;
+using NHibernate.Driver;
 using NHibernate.Linq;
 using NUnit.Framework;
 using System.Linq;
@@ -18,7 +19,7 @@ namespace NHibernate.Test.Futures
 
 				var persons = s.Query<Person>().ToFuture();
 
-				Assert.IsTrue(persons.All(p => s.IsReadOnly(p)));
+				Assert.IsTrue(persons.GetEnumerable().All(p => s.IsReadOnly(p)));
 			}
 		}
 
@@ -64,7 +65,7 @@ namespace NHibernate.Test.Futures
 					.FetchMany(p => p.Children)
 					.Skip(5)
 					.Take(10)
-					.ToFuture().ToList();
+					.ToFuture().GetEnumerable().ToList();
 
 				Assert.IsNotNull(persons10);
 			}
@@ -79,6 +80,7 @@ namespace NHibernate.Test.Futures
 				var persons10 = s.Query<Person>()
 					.Where(p => ids.Contains(p.Id))
 					.ToFuture()
+					.GetEnumerable()
 					.ToList();
 
 				Assert.IsNotNull(persons10);
@@ -116,9 +118,9 @@ namespace NHibernate.Test.Futures
 
 				using (var logSpy = new SqlLogSpy())
 				{
-					foreach (var person in persons5) { }
+					foreach (var person in persons5.GetEnumerable()) { }
 
-					foreach (var person in persons10) { }
+					foreach (var person in persons10.GetEnumerable()) { }
 
 					var events = logSpy.Appender.GetEvents();
 					Assert.AreEqual(1, events.Length);
@@ -149,11 +151,11 @@ namespace NHibernate.Test.Futures
 
 				using (var logSpy = new SqlLogSpy())
 				{
-					foreach (var person in persons5)
+					foreach (var person in persons5.GetEnumerable())
 					{
 					}
 
-					foreach (var person in persons10)
+					foreach (var person in persons10.GetEnumerable())
 					{
 					}
 
@@ -180,8 +182,8 @@ namespace NHibernate.Test.Futures
 
 				using (var logSpy = new SqlLogSpy())
 				{
-					persons5.ToList(); // initialize the enumerable
-					persons.ToList();
+					persons5.GetEnumerable().ToList(); // initialize the enumerable
+					persons.GetEnumerable().ToList();
 
 					var events = logSpy.Appender.GetEvents();
 					Assert.AreEqual(1, events.Length);
@@ -193,7 +195,7 @@ namespace NHibernate.Test.Futures
 		public void CanUseFutureFetchQuery()
 		{
 			IgnoreThisTestIfMultipleQueriesArentSupportedByDriver();
-			
+
 			using (var s = Sfi.OpenSession())
 			using (var tx = s.BeginTransaction())
 			{
@@ -220,8 +222,8 @@ namespace NHibernate.Test.Futures
 				using (var logSpy = new SqlLogSpy())
 				{
 
-					Assert.That(persons.Any(x => x.Children.Any()), "No children found");
-					Assert.That(persons10.Any(x => x.Children.Any()), "No children found");
+					Assert.That(persons.GetEnumerable().Any(x => x.Children.Any()), "No children found");
+					Assert.That(persons10.GetEnumerable().Any(x => x.Children.Any()), "No children found");
 
 					var events = logSpy.Appender.GetEvents();
 					Assert.AreEqual(1, events.Length);
@@ -249,13 +251,13 @@ namespace NHibernate.Test.Futures
 						.Take(10)
 						.ToFuture();
 
-					foreach (var person in persons10) { } // fire first future round-trip
+					foreach (var person in persons10.GetEnumerable()) { } // fire first future round-trip
 
 					var persons5 = s.Query<Person>()
 						.Take(5)
 						.ToFuture();
 
-					foreach (var person in persons5) { } // fire second future round-trip
+					foreach (var person in persons5.GetEnumerable()) { } // fire second future round-trip
 
 					var events = logSpy.Appender.GetEvents();
 					Assert.AreEqual(2, events.Length);
@@ -267,7 +269,7 @@ namespace NHibernate.Test.Futures
 		public void CanCombineSingleFutureValueWithEnumerableFutures()
 		{
 			IgnoreThisTestIfMultipleQueriesArentSupportedByDriver();
-			
+
 			using (var s = Sfi.OpenSession())
 			{
 				var persons = s.Query<Person>()
@@ -282,7 +284,7 @@ namespace NHibernate.Test.Futures
 				{
 					long count = personCount.Value;
 
-					foreach (var person in persons)
+					foreach (var person in persons.GetEnumerable())
 					{
 					}
 
@@ -345,18 +347,58 @@ namespace NHibernate.Test.Futures
 				{
 					var me = meContainer.Value;
 
-					foreach (var person in possiblefriends)
+					foreach (var person in possiblefriends.GetEnumerable())
 					{
 					}
 
 					var events = logSpy.Appender.GetEvents();
 					Assert.AreEqual(1, events.Length);
 					var wholeLog = logSpy.GetWholeLog();
-					string paramPrefix = ((DriverBase)Sfi.ConnectionProvider.Driver).NamedPrefix;
+					string paramPrefix = ((DriverBase) Sfi.ConnectionProvider.Driver).NamedPrefix;
 					Assert.That(
 						wholeLog,
 						Does.Contain(paramPrefix + "p0 = 1 [Type: Int32 (0:0:0)], " + paramPrefix + "p1 = 2 [Type: Int32 (0:0:0)]"));
 				}
+			}
+		}
+
+		[Test]
+		public void UsingManyParametersAndQueries_DoesNotCauseParameterNameCollisions()
+		{
+			//GH-1357
+			using (var s = OpenSession())
+			using (var tx = s.BeginTransaction())
+			{
+				var p1 = new Person { Name = "Person name", Age = 15};
+				var p2 = new Person { Name = "Person name", Age = 5 };
+
+				s.Save(p1);
+				s.Save(p2);
+				tx.Commit();
+			}
+			using (var s = Sfi.OpenSession())
+			{
+				var list = new List<IFutureEnumerable<Person>>();
+				for (var i = 0; i < 12; i++)
+				{
+					var query = s.Query<Person>();
+					for (var j = 0; j < 12; j++)
+					{
+						query = query.Where(x => x.Age > j);
+					}
+					list.Add(query.WithOptions(x => x.SetCacheable(true)).ToFuture());
+				}
+				foreach (var query in list)
+				{
+					var result = query.ToList();
+					Assert.That(result.Count,Is.EqualTo(1));
+				}
+			}
+			using (var s = OpenSession())
+			using (var tx = s.BeginTransaction())
+			{
+				s.Delete("from Person");
+				tx.Commit();
 			}
 		}
 	}

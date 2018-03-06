@@ -1,8 +1,11 @@
 using System;
 using System.Data;
 using System.Data.Common;
+using System.Linq;
 using System.Linq.Expressions;
 using NHibernate.Engine;
+using NHibernate.Event;
+using NHibernate.Event.Default;
 using NHibernate.Stat;
 using NHibernate.Type;
 
@@ -71,7 +74,7 @@ namespace NHibernate
 	/// </para>
 	/// <seealso cref="ISessionFactory"/>
 	/// </remarks>
-	public interface ISession : IDisposable
+	public partial interface ISession : IDisposable
 	{
 		/// <summary>
 		/// Obtain a <see cref="ISession"/> builder with the ability to grab certain information from
@@ -178,8 +181,24 @@ namespace NHibernate
 		/// <summary>
 		/// Does this <c>ISession</c> contain any changes which must be
 		/// synchronized with the database? Would any SQL be executed if
-		/// we flushed this session?
+		/// we flushed this session? May trigger save cascades, which could
+		/// cause themselves some SQL to be executed, especially if the
+		/// <c>identity</c> id generator is used.
 		/// </summary>
+		/// <remarks>
+		/// <para>
+		/// The default implementation first checks if it contains saved or deleted entities to be flushed. If not, it
+		/// then delegate the check to its <see cref="IDirtyCheckEventListener" />, which by default is
+		/// <see cref="DefaultDirtyCheckEventListener" />.
+		/// </para>
+		/// <para>
+		/// <see cref="DefaultDirtyCheckEventListener" /> replicates all the beginning of the flush process, checking
+		/// dirtiness of entities loaded in the session and triggering their pending cascade operations in order to
+		/// detect new and removed children. This can have the side effect of performing the <see cref="Save(object)"/>
+		/// of children, causing their id to be generated. Depending on their id generator, this can trigger calls to
+		/// the database and even actually insert them if using an <c>identity</c> generator.
+		/// </para>
+		/// </remarks>
 		bool IsDirty();
 
 		/// <summary>
@@ -525,11 +544,10 @@ namespace NHibernate
 		/// This operation cascades to associated instances if the association is mapped
 		/// with <tt>cascade="merge"</tt>.<br/>
 		/// The semantics of this method are defined by JSR-220.
+		/// </summary>
 		/// <param name="entityName">Name of the entity.</param>
 		/// <param name="obj">a detached instance with state to be copied </param>
 		/// <returns> an updated persistent instance </returns>
-		/// </summary>
-		/// <returns></returns>
 		object Merge(string entityName, object obj);
 
 		/// <summary>
@@ -555,11 +573,10 @@ namespace NHibernate
 		/// This operation cascades to associated instances if the association is mapped
 		/// with <tt>cascade="merge"</tt>.<br/>
 		/// The semantics of this method are defined by JSR-220.
+		/// </summary>
 		/// <param name="entityName">Name of the entity.</param>
 		/// <param name="entity">a detached instance with state to be copied </param>
 		/// <returns> an updated persistent instance </returns>
-		/// </summary>
-		/// <returns></returns>
 		T Merge<T>(string entityName, T entity) where T : class;
 
 		/// <summary>
@@ -708,6 +725,23 @@ namespace NHibernate
 		/// Get the current Unit of Work and return the associated <c>ITransaction</c> object.
 		/// </summary>
 		ITransaction Transaction { get; }
+
+		/// <summary>
+		/// Join the <see cref="System.Transactions.Transaction.Current"/> system transaction.
+		/// </summary>
+		/// <remarks>
+		/// <para>
+		/// Sessions auto-join current transaction by default on their first usage within a scope.
+		/// This can be disabled with <see cref="ISessionBuilder{T}.AutoJoinTransaction(bool)"/> from
+		/// a session builder obtained with <see cref="ISessionFactory.WithOptions()"/>.
+		/// </para>
+		/// <para>
+		/// This method allows to explicitly join the current transaction. It does nothing if it is already
+		/// joined.
+		/// </para>
+		/// </remarks>
+		/// <exception cref="HibernateException">Thrown if there is no current transaction.</exception>
+		void JoinTransaction();
 
 		/// <summary>
 		/// Creates a new <c>Criteria</c> for the entity class.
@@ -947,5 +981,20 @@ namespace NHibernate
 		/// <returns>The new session.</returns>
 		[Obsolete("Please use SessionWithOptions instead. Now requires to be flushed and disposed of.")]
 		ISession GetSession(EntityMode entityMode);
+
+		/// <summary>
+		/// Creates a new Linq <see cref="IQueryable{T}"/> for the entity class.
+		/// </summary>
+		/// <typeparam name="T">The entity class</typeparam>
+		/// <returns>An <see cref="IQueryable{T}"/> instance</returns>
+		IQueryable<T> Query<T>();
+
+		/// <summary>
+		/// Creates a new Linq <see cref="IQueryable{T}"/> for the entity class and with given entity name.
+		/// </summary>
+		/// <typeparam name="T">The type of entity to query.</typeparam>
+		/// <param name="entityName">The entity name.</param>
+		/// <returns>An <see cref="IQueryable{T}"/> instance</returns>
+		IQueryable<T> Query<T>(string entityName);
 	}
 }

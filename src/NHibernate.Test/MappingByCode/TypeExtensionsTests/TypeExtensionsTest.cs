@@ -6,9 +6,11 @@ using System.Linq;
 using System.Reflection;
 using NHibernate.Mapping.ByCode;
 using NUnit.Framework;
+using TypeExtensions = NHibernate.Mapping.ByCode.TypeExtensions;
 
 namespace NHibernate.Test.MappingByCode.TypeExtensionsTests
 {
+	[TestFixture]
 	public class TypeExtensionsTest
 	{
 		private const BindingFlags BindingFlagsIncludePrivate = BindingFlags.Instance | BindingFlags.NonPublic | BindingFlags.Public;

@@ -3,6 +3,8 @@ using System.Reflection;
 using System.Runtime.Serialization.Formatters.Binary;
 using NHibernate.Cfg;
 using NHibernate.DomainModel;
+using NHibernate.Driver;
+using NHibernate.Engine;
 using NHibernate.Tool.hbm2ddl;
 using NUnit.Framework;
 
@@ -20,6 +22,8 @@ namespace NHibernate.Test.CfgTest
 		[Test]
 		public void Basic_CRUD_should_work()
 		{
+			TestsContext.AssumeSystemTypeIsSerializable();
+
 			Assembly assembly = Assembly.Load("NHibernate.DomainModel");
 			var cfg = new Configuration();
 			if (TestConfigurationHelper.hibernateConfigFile != null)
@@ -82,7 +86,8 @@ namespace NHibernate.Test.CfgTest
 				var p = session.Get<Parent>(parentId);
 				Assert.That(p, Is.Null);
 			}
-			export.Drop(true, true);
+
+			TestCase.DropSchema(true, export, (ISessionFactoryImplementor)sf);
 		}
 	}
 }

@@ -1,3 +1,4 @@
+using System;
 using System.Collections;
 using NHibernate.Cfg;
 using NHibernate.Mapping.ByCode;
@@ -6,6 +7,7 @@ using NUnit.Framework;
 
 namespace NHibernate.Test.NHSpecificTest.NH901
 {
+	[TestFixture]
 	public abstract class FixtureBase : TestCase
 	{
 		protected override void OnTearDown()
@@ -106,7 +108,7 @@ namespace NHibernate.Test.NHSpecificTest.NH901
 	{
 		protected override IList Mappings
 		{
-			get { return new string[0]; }
+			get { return Array.Empty<string>(); }
 		}
 
 		protected override string MappingsAssembly

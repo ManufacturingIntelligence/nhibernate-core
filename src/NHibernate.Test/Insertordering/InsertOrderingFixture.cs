@@ -4,6 +4,7 @@ using System.Collections.Generic;
 using System.Data;
 using System.Data.Common;
 using System.Linq;
+using System.Threading;
 using NHibernate.AdoNet;
 using NHibernate.Cfg;
 using NHibernate.Dialect;
@@ -15,7 +16,8 @@ using NUnit.Framework;
 
 namespace NHibernate.Test.Insertordering
 {
-	public class InsertOrderingFixture : TestCase
+	[TestFixture]
+	public partial class InsertOrderingFixture : TestCase
 	{
 		const int batchSize = 10;
 		const int instancesPerEach = 12;
@@ -531,7 +533,7 @@ namespace NHibernate.Test.Insertordering
 
 		#region Nested type: StatsBatcher
 
-		public class StatsBatcher : SqlClientBatchingBatcher
+		public partial class StatsBatcher : SqlClientBatchingBatcher
 		{
 			private static string batchSQL;
 			private static IList<int> batchSizes = new List<int>();
@@ -558,10 +560,17 @@ namespace NHibernate.Test.Insertordering
 			{
 				var result = base.PrepareBatchCommand(type, sql, parameterTypes);
 
-				if (!StatsEnabled)
-					return result;
+				PrepareStats(sql);
 
-				string sqlstring = sql.ToString();
+				return result;
+			}
+
+			private static void PrepareStats(SqlString sql)
+			{
+				if (!StatsEnabled)
+					return;
+
+				var sqlstring = sql.ToString();
 				if (batchSQL == null || !sqlstring.Equals(batchSQL))
 				{
 					currentBatch++;
@@ -570,28 +579,37 @@ namespace NHibernate.Test.Insertordering
 					Console.WriteLine("--------------------------------------------------------");
 					Console.WriteLine("Preparing statement [" + batchSQL + "]");
 				}
-				return result;
 			}
 
 			public override void AddToBatch(IExpectation expectation)
 			{
-				if (StatsEnabled)
-				{
-					batchSizes[currentBatch]++;
-					Console.WriteLine("Adding to batch [" + batchSQL + "]");
-				}
+				AddStats();
 				base.AddToBatch(expectation);
+			}
+
+			private static void AddStats()
+			{
+				if (!StatsEnabled)
+					return;
+
+				batchSizes[currentBatch]++;
+				Console.WriteLine("Adding to batch [" + batchSQL + "]");
 			}
 
 			protected override void DoExecuteBatch(DbCommand ps)
 			{
-				if (StatsEnabled)
-				{
-					Console.WriteLine("executing batch [" + batchSQL + "]");
-					Console.WriteLine("--------------------------------------------------------");
-				}
-				batchSQL = null;
+				ExecuteStats();
 				base.DoExecuteBatch(ps);
+			}
+
+			private static void ExecuteStats()
+			{
+				if (!StatsEnabled)
+					return;
+
+				Console.WriteLine("executing batch [" + batchSQL + "]");
+				Console.WriteLine("--------------------------------------------------------");
+				batchSQL = null;
 			}
 		}
 
@@ -599,7 +617,7 @@ namespace NHibernate.Test.Insertordering
 
 		#region Nested type: StatsBatcherFactory
 
-		public class StatsBatcherFactory : IBatcherFactory
+		public partial class StatsBatcherFactory : IBatcherFactory
 		{
 			#region IBatcherFactory Members
 
